@@ -30,6 +30,7 @@ import ViolinPlotChart from "@/components/ViolinPlotChart";
 
 const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
     const [referenceVariables, setReferenceVariables] = useState<string[]>([]);
+    const [hasNonNumericData, setHasNonNumericData] = useState(false);
     const [referenceVariableToAdd, setReferenceVariableToAdd] = useState('');
     const [observedVariables, setObservedVariables] = useState<string[]>([]);
     const [variableToObserve, setVariableToObserve] = useState('');
@@ -44,6 +45,22 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
         '#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe',
         '#00C49F', '#FFBB28', '#FF8042', '#a4de6c', '#d0ed57'
     ];
+
+    const checkForNonNumericData = (analysisData: any[]) => {
+        if (!analysisData.length || !observedVariables.length) return false;
+
+        for (const item of data) {
+            for (const variable of observedVariables) {
+                const value = item[variable];
+                // Check if value exists and is not numeric
+                if (value !== undefined && value !== null &&
+                    (isNaN(parseFloat(value)) || !isFinite(value))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
 
     const getVariableDescription = (varName: string) => {
         const variable: any = dictionaryData.find((v: any) => v.name === varName);
@@ -66,11 +83,21 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
         if (referenceVariables.length > 0 && observedVariables.length > 0 && data.length > 0) {
             const newData: any = generateAnalysisData();
             setAnalysisData(newData);
+
+            // Check for non-numeric data and update state and chart type if needed
+            const nonNumericDetected = checkForNonNumericData(data);
+            setHasNonNumericData(nonNumericDetected);
+
+            // Force bar chart if non-numeric data is detected
+            if (nonNumericDetected && chartType !== 'bar' && chartType !== 'pie') {
+                setChartType('bar');
+            }
         } else {
             setAnalysisData([]);
         }
     }, [referenceVariables, observedVariables, data, calculationMode]);
 
+    // Enhance the generateAnalysisData function to better handle non-numeric data
     const generateAnalysisData = () => {
         if (observedVariables.length === 0 || data.length === 0) {
             return [];
@@ -79,6 +106,7 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
         let groupedData: any = {};
         const groups: any[] = [];
 
+        // First pass: create the data structure
         data.forEach(item => {
             // @ts-ignore
             const groupValues = referenceVariables.map(refVar => item[refVar]?.toString() || "N/A");
@@ -102,24 +130,15 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                     groupedData[groupKey][`${variable}_min`] = Infinity;
                     groupedData[groupKey][`${variable}_max`] = -Infinity;
                     groupedData[groupKey][`${variable}_values`] = [];
+                    // Track non-numeric values separately
+                    groupedData[groupKey][`${variable}_non_numeric`] = {};
                 });
 
                 groups.push(groupedData[groupKey]);
             }
         });
 
-        if (groups.length > maxGroups) {
-            groups.sort((a, b) => b.count - a.count);
-            const trimmedGroups = groups.slice(0, maxGroups);
-            console.warn(`Too many combinations (${groups.length}), showing only top ${maxGroups} groups.`);
-
-            const filteredGroupData: any = {};
-            trimmedGroups.forEach(group => {
-                filteredGroupData[group.key] = group;
-            });
-            groupedData = filteredGroupData;
-        }
-
+        // Second pass: data processing
         data.forEach(item => {
             // @ts-ignore
             const groupValues = referenceVariables.map(refVar => item[refVar]?.toString() || "N/A");
@@ -130,55 +149,90 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                 groupedData[groupKey]._entryCount++;
 
                 observedVariables.forEach(variable => {
-                    const value = parseFloat(item[variable]);
+                    const rawValue = item[variable];
+                    const value = parseFloat(rawValue);
+
                     if (!isNaN(value)) {
-                        // Track sum for average calculation
-                        groupedData[groupKey][variable] += value;
-                        // Track count
+                        // Handle numeric values
+                        if (value >= 0) {  // Only process non-negative values
+                            groupedData[groupKey][variable] += value;
+                            groupedData[groupKey][`${variable}_count`]++;
+                            groupedData[groupKey][`${variable}_min`] = Math.min(groupedData[groupKey][`${variable}_min`], value);
+                            groupedData[groupKey][`${variable}_max`] = Math.max(groupedData[groupKey][`${variable}_max`], value);
+                            groupedData[groupKey][`${variable}_values`].push(value);
+                        }
+                    } else if (rawValue !== undefined && rawValue !== null) {
+                        // Handle non-numeric values by counting occurrences
+                        const strValue = String(rawValue);
+                        if (!groupedData[groupKey][`${variable}_non_numeric`][strValue]) {
+                            groupedData[groupKey][`${variable}_non_numeric`][strValue] = 0;
+                        }
+                        groupedData[groupKey][`${variable}_non_numeric`][strValue]++;
+
+                        // For non-numeric data, we'll use the count as the value for charts
                         groupedData[groupKey][`${variable}_count`]++;
-                        // Track min/max
-                        groupedData[groupKey][`${variable}_min`] = Math.min(groupedData[groupKey][`${variable}_min`], value);
-                        groupedData[groupKey][`${variable}_max`] = Math.max(groupedData[groupKey][`${variable}_max`], value);
-                        // Store all values for median calculation
-                        groupedData[groupKey][`${variable}_values`].push(value);
                     }
                 });
             }
         });
 
+        // Third pass: finalize calculations
         Object.values(groupedData).forEach((group: any) => {
             observedVariables.forEach(variable => {
-                if (group[`${variable}_count`] > 0) {
+                const hasNonNumeric = Object.keys(group[`${variable}_non_numeric`]).length > 0;
+                const hasNumeric = group[`${variable}_count`] > 0;
+
+                if (hasNumeric) {
                     const values = group[`${variable}_values`];
 
                     switch (calculationMode) {
                         case 'average':
-                            group[variable] = group[variable] / group[`${variable}_count`];
+                            group[variable] = values.length ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0;
                             break;
                         case 'sum':
-                            // Sum is already calculated during aggregation
+                            group[variable] = values.reduce((a: number, b: number) => a + b, 0);
                             break;
                         case 'count':
-                            group[variable] = group[`${variable}_count`];
+                            group[variable] = values.length;
                             break;
                         case 'min':
-                            group[variable] = group[`${variable}_min`];
+                            group[variable] = values.length ? Math.min(...values) : 0;
                             break;
                         case 'max':
-                            group[variable] = group[`${variable}_max`];
+                            group[variable] = values.length ? Math.max(...values) : 0;
                             break;
                         case 'median':
-                            // Calculate median
-                            values.sort((a: number, b: number) => a - b);
-                            const mid = Math.floor(values.length / 2);
-                            group[variable] = values.length % 2 === 0
-                                ? (values[mid - 1] + values[mid]) / 2
-                                : values[mid];
+                            if (values.length) {
+                                values.sort((a: number, b: number) => a - b);
+                                const mid = Math.floor(values.length / 2);
+                                group[variable] = values.length % 2 === 0
+                                    ? (values[mid - 1] + values[mid]) / 2
+                                    : values[mid];
+                            } else {
+                                group[variable] = 0;
+                            }
                             break;
                     }
+                } else if (hasNonNumeric) {
+                    // For non-numeric data, use count or most frequent value depending on chart type
+                    const nonNumericValues = group[`${variable}_non_numeric`];
+                    const entries = Object.entries(nonNumericValues);
+
+                    // Find the most frequent non-numeric value
+                    const mostFrequent = entries.reduce(
+                        (max, current) => current[1] > max[1] ? current : max,
+                        ["", 0]
+                    );
+
+                    // Use count by default
+                    group[variable] = entries.reduce((sum, [_, count]) => sum + count, 0);
+
+                    // Store the most frequent value for tooltips
+                    group[`${variable}_most_frequent`] = mostFrequent[0];
+                    group[`${variable}_frequency`] = mostFrequent[1];
                 }
 
-                // Clean up temporary fields
+                // Clean up temporary fields but keep non-numeric data for tooltips
                 delete group[`${variable}_count`];
                 delete group[`${variable}_min`];
                 delete group[`${variable}_max`];
@@ -230,12 +284,20 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                 {payload.map((entry, index) => {
                     const varName = entry.name.split(' ')[0];
                     const desc = getVariableDescription(varName);
+                    const hasNonNumeric = payload[0]?.payload[`${varName}_non_numeric`] &&
+                        Object.keys(payload[0]?.payload[`${varName}_non_numeric`]).length > 0;
 
                     return (
                         <div key={index} className="text-sm">
                             <span style={{color: entry.color}}>{entry.name}: </span>
-                            <span
-                                className="font-medium text-gray-800 dark:text-gray-100">{entry.value.toFixed(2)}</span>
+                            <span className="font-medium text-gray-800 dark:text-gray-100">
+                            {typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value}
+                        </span>
+                            {hasNonNumeric && payload[0]?.payload[`${varName}_most_frequent`] && (
+                                <span className="text-xs ml-1 text-gray-600">
+                                (Most common: {payload[0]?.payload[`${varName}_most_frequent`]})
+                            </span>
+                            )}
                             {desc && <p className="text-xs text-gray-500">{desc}</p>}
                         </div>
                     );
@@ -602,16 +664,24 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                                     <button
                                         key={type}
                                         onClick={() => setChartType(type)}
+                                        disabled={hasNonNumericData && !['bar', 'pie'].includes(type)}
                                         className={`p-2 rounded capitalize ${
                                             chartType === type
                                                 ? 'bg-blue-500'
                                                 : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
-                                        }`}
+                                        } ${hasNonNumericData && !['bar', 'pie'].includes(type) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                         {type} Chart
                                     </button>
                                 ))}
                             </div>
+                            {hasNonNumericData && (
+                                <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded">
+                                    <p className="text-amber-800 dark:text-amber-200 text-sm">
+                                        Non-numeric data detected. Using bar chart for best visualization.
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         <div>
