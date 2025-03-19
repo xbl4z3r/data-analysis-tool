@@ -220,12 +220,12 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
 
                     // Find the most frequent non-numeric value
                     const mostFrequent = entries.reduce(
-                        (max, current) => current[1] > max[1] ? current : max,
+                        (max: any, current: any) => current[1] > max[1] ? current : max,
                         ["", 0]
                     );
 
                     // Use count by default
-                    group[variable] = entries.reduce((sum, [_, count]) => sum + count, 0);
+                    group[variable] = entries.reduce((sum, [_, count] : any) => sum + count, 0);
 
                     // Store the most frequent value for tooltips
                     group[`${variable}_most_frequent`] = mostFrequent[0];
