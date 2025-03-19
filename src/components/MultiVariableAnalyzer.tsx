@@ -17,11 +17,16 @@ import {
     Radar,
     RadarChart,
     ResponsiveContainer,
+    Scatter,
+    ScatterChart,
     Tooltip,
     XAxis,
     YAxis
 } from 'recharts';
 import ExportOptions from "@/components/ExportOptions";
+import BoxPlotChart from "@/components/BoxPlotChart";
+import HeatmapChart from "@/components/HeatmapChart";
+import ViolinPlotChart from "@/components/ViolinPlotChart";
 
 const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
     const [referenceVariables, setReferenceVariables] = useState<string[]>([]);
@@ -260,6 +265,84 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
         );
 
         switch (chartType) {
+            case 'scatter':
+                return (
+                    <ScatterChart margin={{top: 20, right: 30, left: 20, bottom: 30}}>
+                        <CartesianGrid strokeDasharray="3 3"/>
+                        <XAxis dataKey="group" name="Group"/>
+                        <YAxis/>
+                        <Tooltip cursor={{strokeDasharray: '3 3'}}/>
+                        <Legend/>
+                        {observedVariables.map((variable, index) => (
+                            <Scatter
+                                key={variable}
+                                name={variable}
+                                data={analysisData.map((item: any) => ({
+                                    x: item.group,
+                                    y: item[variable] || 0,
+                                    z: 200 // fixed size for scatter points
+                                }))}
+                                fill={chartColors[index % chartColors.length]}
+                            />
+                        ))}
+                    </ScatterChart>
+                );
+
+            case 'bubble':
+                return (
+                    <ScatterChart margin={{top: 20, right: 30, left: 20, bottom: 30}}>
+                        <CartesianGrid strokeDasharray="3 3"/>
+                        <XAxis dataKey="group" name="Group"/>
+                        <YAxis/>
+                        <Tooltip cursor={{strokeDasharray: '3 3'}}/>
+                        <Legend/>
+                        {observedVariables.map((variable, index) => (
+                            <Scatter
+                                key={variable}
+                                name={variable}
+                                data={analysisData.map((item: any) => ({
+                                    x: item.group,
+                                    y: item[variable] || 0,
+                                    z: Math.max(50, item[variable] * 5 || 100) // bubble size based on value
+                                }))}
+                                fill={chartColors[index % chartColors.length]}
+                            />
+                        ))}
+                    </ScatterChart>
+                );
+
+            case 'heatmap':
+                // For heatmap we need to transform data into a matrix format
+                return (
+                    <div className="heatmap-container">
+                        <HeatmapChart
+                            data={analysisData}
+                            observedVariables={observedVariables}
+                            referenceVariables={referenceVariables}
+                            calculationMode={calculationMode}
+                        />
+                    </div>
+                );
+
+            case 'boxplot':
+                return (
+                    <BoxPlotChart
+                        data={analysisData}
+                        observedVariables={observedVariables}
+                        calculationMode={calculationMode}
+                        colors={chartColors}
+                    />
+                );
+
+            case 'violin':
+                return (
+                    <ViolinPlotChart
+                        data={analysisData}
+                        observedVariables={observedVariables}
+                        colors={chartColors}
+                    />
+                );
+
             case 'bar':
                 return (
                     <BarChart data={analysisData}>
@@ -514,8 +597,8 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                             </div>
                             <h3 className="text-md font-medium mt-4 mb-2 text-gray-800 dark:text-gray-100">Chart
                                 Type</h3>
-                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                                {['bar', 'line', 'area', 'radar', 'pie'].map(type => (
+                            <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-4">
+                                {['bar', 'line', 'area', 'radar', 'pie', 'scatter', 'bubble', 'heatmap', 'boxplot', 'violin'].map(type => (
                                     <button
                                         key={type}
                                         onClick={() => setChartType(type)}
@@ -542,7 +625,12 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                                             <ExportOptions
                                                 chartRef={chartContainerRef}
                                                 data={analysisData}
+                                                dictionaryData={dictionaryData}
                                                 filename={`olympic-analysis-${referenceVariables.join('-')}`}
+                                                referenceVariables={referenceVariables}
+                                                observedVariables={observedVariables}
+                                                calculationMode={calculationMode}
+                                                chartType={chartType}
                                             />
                                         )}
                                     </div>
