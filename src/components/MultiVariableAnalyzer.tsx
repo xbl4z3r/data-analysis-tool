@@ -225,7 +225,7 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                     );
 
                     // Use count by default
-                    group[variable] = entries.reduce((sum, [_, count] : any) => sum + count, 0);
+                    group[variable] = entries.reduce((sum, [_, count]: any) => sum + count, 0);
 
                     // Store the most frequent value for tooltips
                     group[`${variable}_most_frequent`] = mostFrequent[0];
@@ -676,7 +676,8 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                                 ))}
                             </div>
                             {hasNonNumericData && (
-                                <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded">
+                                <div
+                                    className="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded">
                                     <p className="text-amber-800 dark:text-amber-200 text-sm">
                                         Non-numeric data detected. Using bar chart for best visualization.
                                     </p>
@@ -752,6 +753,28 @@ const MultiVariableAnalyzer = ({data = [], dictionaryData = []}) => {
                                 {calculationMode === 'max' && ' Higher values indicate larger maximums.'}
                                 {calculationMode === 'median' && ' Higher values indicate larger middle values.'}
                                 {chartType === 'pie' && ' Larger pie slices represent higher values.'}
+                            </p>
+                            <p className="text-sm text-gray-700 mt-2">
+                                {referenceVariables.map(variable => {
+                                    const desc = getVariableDescription(variable);
+                                    return (
+                                        <span key={variable} className="bg-gray-100 dark:bg-gray-700 p-1 rounded mr-2">
+                                            {variable}: {desc}
+                                        </span>
+                                    );
+                                })}
+                                {observedVariables.map(variable => {
+                                    const desc = getVariableDescription(variable);
+                                    return (
+                                        <span key={variable} className="bg-gray-100 dark:bg-gray-700 p-1 rounded mr-2">
+                                            {variable}: {desc}
+                                        </span>
+                                    );
+                                })}
+                            </p>
+                            <p className="text-sm text-gray-700 mt-2">
+                                Hover over the chart to see detailed information about each group. Definitions of
+                                variables are shown in tooltips.
                             </p>
                         </div>
                     )}
