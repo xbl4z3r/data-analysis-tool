@@ -1,7 +1,8 @@
 {
-  "name": "data-analysis-tool",
-  "version": "0.1.0",
-  "private": true,
+  "name": "xbl4z3rs-data-analysis-tool",
+  "description": "Data Analysis Tool made for the European Statistics Competition 2025",
+  "version": "1.0.0",
+  "license": "MIT",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -9,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.5.0",
     "axios": "^1.8.3",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
